@@ -138,6 +138,52 @@ std::string badguykind_to_string(BadGuyKind kind)
     }
 }
 
+void
+BadGuy::prepare()
+{
+  if(sprite_left)
+    sprite_left->prepare();
+  if(sprite_right && sprite_right != sprite_left)
+    sprite_right->prepare();
+
+  switch(kind)
+    {
+    case BAD_MRICEBLOCK:
+      img_mriceblock_flat_left->prepare();
+      img_mriceblock_flat_right->prepare();
+      img_mriceblock_falling_left->prepare();
+      img_mriceblock_falling_right->prepare();
+      break;
+    case BAD_JUMPY:
+      img_jumpy_left_down->prepare();
+      img_jumpy_left_middle->prepare();
+      break;
+    case BAD_MRBOMB:
+      img_mrbomb_ticking_left->prepare();
+      img_mrbomb_ticking_right->prepare();
+      img_mrbomb_explosion->prepare();
+      break;
+    case BAD_STALACTITE:
+      img_stalactite_broken->prepare();
+      break;
+    case BAD_FISH:
+      img_fish_down->prepare();
+      break;
+    case BAD_BOUNCINGSNOWBALL:
+      img_bouncingsnowball_squished->prepare();
+      break;
+    case BAD_FLYINGSNOWBALL:
+      img_flyingsnowball_squished->prepare();
+      break;
+    case BAD_SNOWBALL:
+      img_snowball_squished_left->prepare();
+      img_snowball_squished_right->prepare();
+      break;
+    default:
+      break;
+    }
+}
+
 BadGuy::BadGuy(float x, float y, BadGuyKind kind_, bool stay_on_platform_)
   : removable(false), squishcount(0)
 {

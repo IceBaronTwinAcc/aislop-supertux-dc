@@ -40,7 +40,13 @@ void defaults ()
 
   use_fullscreen = true;
   show_fps = false;
+#ifdef __DREAMCAST__
+  use_gl = true;
+  use_60hz = dreamcast_default_60hz();
+#else
   use_gl = false;
+  use_60hz = false;
+#endif
 
   use_sound = true;
   use_music = true;
@@ -59,20 +65,18 @@ void loadconfig(void)
   if (file == NULL)
     return;
 
-#ifdef __DREAMCAST__
-  // Dreamcast: parse VMU data
-  vmu_pkg_t pkg = loadFromVMU(file);
-  fclose(file);
-
-  file = fmemopen((char*)pkg.data, (size_t)pkg.data_len, "r");
-#endif
-
   /* read config file */
 
   lisp_stream_t   stream;
   lisp_object_t * root_obj = NULL;
 
+#ifdef __DREAMCAST__
+  std::string vmu_data = loadFromVMU(file);
+  fclose(file);
+  lisp_stream_init_string(&stream, const_cast<char*>(vmu_data.c_str()));
+#else
   lisp_stream_init_file (&stream, file);
+#endif
   root_obj = lisp_read (&stream);
 
   if (root_obj->type == LISP_TYPE_EOF || root_obj->type == LISP_TYPE_PARSE_ERROR)
@@ -87,6 +91,7 @@ void loadconfig(void)
   reader.read_bool("sound",      &use_sound);
   reader.read_bool("music",      &use_music);
   reader.read_bool("show_fps",   &show_fps);
+  reader.read_bool("refresh_60hz", &use_60hz);
 
   std::string video;
   reader.read_string ("video", &video);
@@ -115,7 +120,9 @@ void loadconfig(void)
   reader.read_int ("keyboard-fire", &keymap.fire);
 
   lisp_free(root_obj);
+#ifndef __DREAMCAST__
   fclose(file);
+#endif
 }
 
 void saveconfig (void)
@@ -134,6 +141,7 @@ void saveconfig (void)
 \t(sound      %s)\n\
 \t(music      %s)\n\
 \t(show_fps   %s)\n\
+\t(refresh_60hz %s)\n\
 \n\
 \t;; either \"opengl\" or \"sdl\"\n\
 \t(video      \"%s\")\n\
@@ -151,7 +159,7 @@ void saveconfig (void)
 \t(keyboard-left  %d)\n\
 \t(keyboard-right %d)\n\
 \t(keyboard-fire  %d)\n\
-)\n", use_fullscreen ? "#t" : "#f", use_sound ? "#t" : "#f", use_music ? "#t" : "#f", show_fps ? "#t" : "#f", use_gl ? "opengl" : "sdl", use_joystick ? joystick_num : -1, joystick_keymap.x_axis, joystick_keymap.y_axis, joystick_keymap.a_button, joystick_keymap.b_button, joystick_keymap.start_button, joystick_keymap.dead_zone, keymap.jump, keymap.duck, keymap.left, keymap.right, keymap.fire);
+)\n", use_fullscreen ? "#t" : "#f", use_sound ? "#t" : "#f", use_music ? "#t" : "#f", show_fps ? "#t" : "#f", use_60hz ? "#t" : "#f", use_gl ? "opengl" : "sdl", use_joystick ? joystick_num : -1, joystick_keymap.x_axis, joystick_keymap.y_axis, joystick_keymap.a_button, joystick_keymap.b_button, joystick_keymap.start_button, joystick_keymap.dead_zone, keymap.jump, keymap.duck, keymap.left, keymap.right, keymap.fire);
 
 #ifdef __DREAMCAST__
       saveToVMU(config, data, "Game configuration");

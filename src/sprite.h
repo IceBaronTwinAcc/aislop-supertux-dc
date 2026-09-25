@@ -57,6 +57,7 @@ class Sprite
   void update(float delta);
   void draw(float x, float y);
   void draw_part(float sx, float sy, float x, float y, float w, float h);
+  void prepare();
   int get_current_frame() const;
 
   std::string get_name() const { return name; } 

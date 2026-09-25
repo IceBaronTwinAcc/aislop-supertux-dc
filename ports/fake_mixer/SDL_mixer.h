@@ -2,8 +2,8 @@
 #ifndef _FAKE_MIXER_H
 #define _FAKE_MIXER_H
 
-#include <sound/sfxmgr.h>
-#include <SDL/SDL.h>
+#include <dc/sound/sfxmgr.h>
+#include <SDL.h>
 #include "mikmod.h"
 
 #define MIX_DEFAULT_FORMAT	0

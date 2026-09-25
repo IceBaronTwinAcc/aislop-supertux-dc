@@ -141,34 +141,9 @@ BouncyBrick::action(double frame_ratio)
 void
 BouncyBrick::draw()
 {
-  SDL_Rect dest;
-  
   if (base.x >= scroll_x - 32 &&
       base.x <= scroll_x + screen->w)
     {
-      dest.x = (int)(base.x - scroll_x);
-      dest.y = (int)base.y;
-      dest.w = 32;
-      dest.h = 32;
-
-      Level* plevel = World::current()->get_level();
-
-      // FIXME: overdrawing hack to clean the tile from the screen to
-      // paint it later at on offseted position
-      if(plevel->bkgd_image[0] == '\0')
-        {
-          fillrect(base.x - scroll_x, base.y,
-                   32,32, 
-                   plevel->bkgd_top.red, plevel->bkgd_top.green, plevel->bkgd_top.blue, 0);
-// FIXME: doesn't respect the gradient, futhermore is this necessary at all??
-        }
-      else
-        {
-          int s = ((int)scroll_x / 2)%640;
-          plevel->img_bkgd->draw_part(dest.x + s, dest.y, 
-                                      dest.x, dest.y,dest.w,dest.h);
-        }
-
       Tile::draw(base.x - scroll_x,
                  base.y + offset,
                  shape);
@@ -210,4 +185,3 @@ FloatingScore::draw()
 }
 
 /* EOF */
-

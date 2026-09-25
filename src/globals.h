@@ -74,6 +74,7 @@ extern Text* yellow_nums;
 extern MouseCursor * mouse_cursor;
 
 extern bool use_gl;
+extern bool use_60hz;
 extern bool use_joystick;
 extern bool use_fullscreen;
 extern bool debug_mode;

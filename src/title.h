@@ -24,7 +24,13 @@
 GameSession* getSession();
 void createDemo();
 void deleteDemo();
+void draw_background();
 void title(void);
+#ifdef __DREAMCAST__
+bool selectVMU(const char* vmu);
+#endif
+#ifdef PROFILE_AUTORUN_TITLE_FLOW
+void profile_title_flow();
+#endif
 
 // EOF //
-

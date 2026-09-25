@@ -36,7 +36,13 @@ void st_general_setup(void);
 void st_general_free();
 void st_video_setup_sdl(void);
 void st_video_setup_gl(void);
+#ifdef PVR_RENDERER
+void st_video_setup_pvr(void);
+#endif
 void st_video_setup(void);
+#ifdef __DREAMCAST__
+void st_video_set_refresh_rate(void);
+#endif
 void st_audio_setup(void);
 void st_joystick_setup(void);
 void st_shutdown(void);
@@ -51,4 +57,3 @@ void update_load_save_game_menu(Menu* pmenu);
 void parseargs(int argc, char * argv[]);
 
 #endif /*SUPERTUX_SETUP_H*/
-

@@ -42,7 +42,6 @@ Sprite::Sprite(lisp_object_t* cur)
   for(std::vector<std::string>::size_type i = 0; i < images.size(); ++i)
     {
       std::string imgfile = datadir + "/images/" + ReplaceAll(images[i], "-", "");
-      printf("sprite: %s\n", imgfile.c_str());
       surfaces.push_back(
           new Surface(imgfile, USE_ALPHA));
     }        
@@ -92,6 +91,13 @@ Sprite::draw_part(float sx, float sy, float x, float y, float w, float h)
 
   if (frame < surfaces.size())
     surfaces[frame]->draw_part(sx, sy, x - x_hotspot, y - y_hotspot, w, h);
+}
+
+void
+Sprite::prepare()
+{
+  for(std::vector<Surface*>::iterator i = surfaces.begin(); i != surfaces.end(); ++i)
+    (*i)->prepare();
 }
 
 void

@@ -23,6 +23,7 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
+#include <algorithm>
 #include <SDL.h>
 #include <SDL_image.h>
 
@@ -37,6 +38,7 @@
 #include "screen.h"
 #include "setup.h"
 #include "type.h"
+#include "pvr_renderer.h"
 
 /* Needed for line calculations */
 #define SGN(x) ((x)>0 ? 1 : ((x)==0 ? 0:(-1)))
@@ -46,10 +48,13 @@
 
 void clearscreen(int r, int g, int b)
 {
+#ifdef PVR_RENDERER
+  PVRRenderer::set_clear_color(r, g, b);
+#else
 #ifndef NOOPENGL
   if(use_gl)
     {
-      glClearColor(r/256, g/256, b/256, 1.0);
+      glClearColor(r / 255.0f, g / 255.0f, b / 255.0f, 1.0f);
       glClear(GL_COLOR_BUFFER_BIT);
     }
   else
@@ -61,15 +66,24 @@ void clearscreen(int r, int g, int b)
 
     }
 #endif
+#endif
 }
 
 /* --- DRAWS A VERTICAL GRADIENT --- */
 
 void drawgradient(Color top_clr, Color bot_clr)
 {
+#ifdef PVR_RENDERER
+  PVRRenderer::draw_colored_quad(0, 0, 640, 480,
+                                 top_clr.red, top_clr.green, top_clr.blue, 255,
+                                 bot_clr.red, bot_clr.green, bot_clr.blue, 255);
+#else
 #ifndef NOOPENGL
   if(use_gl)
     {
+      glDisable(GL_TEXTURE_2D);
+      glDisable(GL_ALPHA_TEST);
+      glDisable(GL_BLEND);
       glBegin(GL_QUADS);
       glColor4ub(top_clr.red, top_clr.green, top_clr.blue, 255);
       glVertex2f(0, 0);
@@ -93,6 +107,7 @@ void drawgradient(Color top_clr, Color bot_clr)
 #ifndef NOOPENGL
 
     }
+#endif
 #endif
 }
 
@@ -205,9 +220,30 @@ void drawpixel(int x, int y, Uint32 pixel)
 
 void drawline(int x1, int y1, int x2, int y2, int r, int g, int b, int a)
 {
+#ifdef PVR_RENDERER
+  if(x1 == x2)
+    PVRRenderer::draw_colored_quad(x1, std::min(y1, y2), 1, ABS(y2 - y1) + 1,
+                                   r, g, b, a, r, g, b, a);
+  else if(y1 == y2)
+    PVRRenderer::draw_colored_quad(std::min(x1, x2), y1, ABS(x2 - x1) + 1, 1,
+                                   r, g, b, a, r, g, b, a);
+  else
+    {
+      const int steps = std::max(ABS(x2 - x1), ABS(y2 - y1));
+      for(int step = 0; step <= steps; ++step)
+        {
+          const float amount = step / static_cast<float>(steps);
+          PVRRenderer::draw_colored_quad(x1 + (x2 - x1) * amount,
+                                         y1 + (y2 - y1) * amount,
+                                         1, 1, r, g, b, a, r, g, b, a);
+        }
+    }
+#else
 #ifndef NOOPENGL
   if(use_gl)
     {
+      glDisable(GL_TEXTURE_2D);
+      glDisable(GL_ALPHA_TEST);
       glEnable(GL_BLEND);
       glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
       glColor4ub(r, g, b,a);
@@ -265,6 +301,7 @@ void drawline(int x1, int y1, int x2, int y2, int r, int g, int b, int a)
 
     }
 #endif
+#endif
 }
 
 /* --- FILL A RECT --- */
@@ -282,9 +319,14 @@ if(h < 0)
 	h = -h;
 	}
 
+#ifdef PVR_RENDERER
+  PVRRenderer::draw_colored_quad(x, y, w, h, r, g, b, a, r, g, b, a);
+#else
 #ifndef NOOPENGL
   if(use_gl)
     {
+      glDisable(GL_TEXTURE_2D);
+      glDisable(GL_ALPHA_TEST);
       glEnable(GL_BLEND);
       glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
       glColor4ub(r, g, b,a);
@@ -337,6 +379,7 @@ if(h < 0)
 
     }
 #endif
+#endif
 }
 
 
@@ -344,18 +387,26 @@ if(h < 0)
 
 void updatescreen(void)
 {
+#ifdef PVR_RENDERER
+  PVRRenderer::finish_frame();
+#else
   if(use_gl)  /*clearscreen(0,0,0);*/
     SDL_GL_SwapBuffers();
   else
     SDL_UpdateRect(screen, 0, 0, screen->w, screen->h);
+#endif
 }
 
 void flipscreen(void)
 {
+#ifdef PVR_RENDERER
+  PVRRenderer::finish_frame();
+#else
   if(use_gl)
     SDL_GL_SwapBuffers();
   else
     SDL_Flip(screen);
+#endif
 }
 
 void fadeout()
@@ -367,7 +418,14 @@ void fadeout()
 
 void update_rect(SDL_Surface *scr, Sint32 x, Sint32 y, Sint32 w, Sint32 h)
 {
+#ifndef PVR_RENDERER
   if(!use_gl)
     SDL_UpdateRect(scr, x, y, w, h);
+#else
+  (void)scr;
+  (void)x;
+  (void)y;
+  (void)w;
+  (void)h;
+#endif
 }
-

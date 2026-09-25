@@ -30,7 +30,6 @@
 
 #ifdef __DREAMCAST__
 #include <kos.h>
-#include <mp3/sndserver.h>
 #endif
 
 #ifndef WIN32
@@ -57,6 +56,7 @@
 #include "tile.h"
 #include "resources.h"
 #include "worldmap.h"
+#include "dreamcast.h"
 
 static Surface* bkg_title;
 static Surface* logo;
@@ -75,7 +75,6 @@ static std::string current_contrib_subset;
 static string_list_type worldmap_list;
 
 GameSession* session = 0;
-
 
 GameSession* getSession()
 {
@@ -117,13 +116,11 @@ bool selectVMU(const char* vmu)
 	int num = *(vmu+1) - '0';
 
 	maple_device_t* device = maple_enum_dev(controllerToInt[*(vmu)], num);
-	if(device)
+	if(device && (device->info.functions & MAPLE_FUNC_MEMCARD))
 	{
 		strcpy(st_dir, newhome);
 		strcpy(st_save_dir, newhome);
 		printf("selected VMU %s\n", vmu);
-		loadconfig();
-		music_manager->enable_music(use_music);
 		return true;
 	}
 
@@ -301,6 +298,64 @@ void draw_demo(GameSession* session, double frame_ratio)
   world->draw();
 }
 
+#ifdef PROFILE_AUTORUN_TITLE_FLOW
+static void profile_draw_title_frames(unsigned int runtime)
+{
+  const Uint32 start = SDL_GetTicks();
+  Uint32 previous = start;
+  while(SDL_GetTicks() - start < runtime)
+    {
+      const Uint32 now = SDL_GetTicks();
+      const double frame_ratio = ((double)(now - previous) / (double)FRAME_RATE) / 2;
+      previous = now;
+
+      draw_demo(session, frame_ratio);
+      if(Menu::current() == main_menu)
+        logo->draw(160, 30);
+
+      white_small_text->draw(" SuperTux " VERSION "\n"
+                             "Copyright (c) 2003 SuperTux Devel Team\n"
+                             "This game comes with ABSOLUTELY NO WARRANTY. This is free software, and you\n"
+                             "are welcome to redistribute it under certain conditions; see the file COPYING\n"
+                             "for details.\n",
+                             0, 420, 0);
+
+      if(Menu::current())
+        {
+          Menu::current()->draw();
+          Menu::current()->action();
+        }
+      flipscreen();
+    }
+}
+
+void profile_title_flow()
+{
+  random_timer.init(true);
+  walking = true;
+  st_pause_ticks_init();
+  createDemo();
+  loadsounds();
+  random_timer.start(rand() % 2000 + 2000);
+
+  Menu::set_current(vmu_menu);
+  profile_draw_title_frames(1000);
+
+  selectVMU("c1");
+  Menu::set_current(main_menu);
+  profile_draw_title_frames(1000);
+
+  update_load_save_game_menu(load_game_menu);
+  Menu::set_current(load_game_menu);
+  profile_draw_title_frames(1000);
+
+  unloadsounds();
+  deleteDemo();
+  Menu::set_current(0);
+  fadeout();
+}
+#endif
+
 /* --- TITLE SCREEN --- */
 void title(void)
 {
@@ -356,8 +411,6 @@ void title(void)
 
       // Calculate the movement-factor
       double frame_ratio = ((double)(update_time-last_update_time))/((double)FRAME_RATE);
-      if(frame_ratio > 1.5) /* Quick hack to correct the unprecise CPU clocks a little bit. */
-        frame_ratio = 1.5 + (frame_ratio - 1.5) * 0.85;
       /* Lower the frame_ratio that Tux doesn't jump to hectically throught the demo. */
       frame_ratio /= 2;
 
@@ -389,7 +442,6 @@ void title(void)
                              "are welcome to redistribute it under certain conditions; see the file COPYING\n"
                              "for details.\n",
                              0, 420, 0);
-
       /* Don't draw menu, if quit is true */
       Menu* menu = Menu::current();
       if(menu)
@@ -449,9 +501,9 @@ void title(void)
                   break;
                 case MNID_CREDITS:
                   music_manager->halt_music();
-                  mp3_start((datadir + "/music/credits.mp3").c_str(), 0);
+                  dreamcast_mp3_start((datadir + "/music/credits.mp3").c_str(), 0);
                   display_text_file("CREDITS", bkg_title, SCROLL_SPEED_CREDITS);
-                  mp3_stop();
+                  dreamcast_mp3_stop();
                   session->get_world()->play_music(LEVEL_MUSIC);
                   Menu::set_current(main_menu);
                   break;
@@ -505,7 +557,6 @@ void title(void)
               check_contrib_subset_menu();
             }
         }
-
       //mouse_cursor->draw();
 
       flipscreen();
@@ -527,4 +578,3 @@ void title(void)
 }
 
 // EOF //
-

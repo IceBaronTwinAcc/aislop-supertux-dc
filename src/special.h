@@ -39,6 +39,7 @@ enum UpgradeKind {
 
 void load_special_gfx();
 void free_special_gfx();
+void prepare_special_gfx();
 
 class Upgrade : public GameObject
 {

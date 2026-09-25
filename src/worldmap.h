@@ -62,6 +62,7 @@ public:
   ~Tile();
   
   Surface* sprite;
+  std::string imagefile;
 
   // Directions in which Tux is allowed to walk from this tile
   bool north;
@@ -214,6 +215,9 @@ private:
 
   Direction input_direction;
   bool enter_level;
+#ifdef PROFILE_AUTORUN_WORLDMAP
+  unsigned int profile_level_runtime;
+#endif
 
   Point offset;
   std::string savegame_file;
@@ -255,6 +259,10 @@ public:
   void savegame(const std::string& filename);
   void loadgame(const std::string& filename);
   void loadmap(const std::string& filename);
+
+#ifdef PROFILE_AUTORUN_WORLDMAP
+  bool profile_enter_level(int level_number, unsigned int runtime);
+#endif
 
   const std::string& get_world_title() const
     { return name; }

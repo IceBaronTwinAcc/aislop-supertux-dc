@@ -127,6 +127,7 @@ public:
    */
   void remove_me();  
   bool is_removable() const { return removable; }
+  void prepare();
  
 private:
   void action_mriceblock(double frame_ratio);
@@ -182,4 +183,3 @@ struct BadGuyData
 /* Local Variables: */
 /* mode:c++ */
 /* End: */
-

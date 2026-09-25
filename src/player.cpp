@@ -724,6 +724,11 @@ Player::collision(void* p_c_object, int c_object)
 void
 Player::kill(HurtMode mode)
 {
+#ifdef PROFILE_AUTORUN_INVINCIBLE
+  if (mode == SHRINK)
+    return;
+#endif
+
   play_sound(sounds[SND_HURT], SOUND_CENTER_SPEAKER);
 
   physic.set_velocity_x(0);
@@ -809,4 +814,3 @@ Player::check_bounds(bool back_scrolling, bool hor_autoscroll)
 }
 
 // EOF //
-

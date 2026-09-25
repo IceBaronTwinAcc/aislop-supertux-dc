@@ -67,4 +67,3 @@ class Text
 };
 
 #endif /*SUPERTUX_TEXT_H*/
-

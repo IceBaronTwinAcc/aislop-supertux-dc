@@ -406,4 +406,3 @@ void display_text_file(const std::string& file, Surface* surface, float scroll_s
   SDL_EnableKeyRepeat(0, 0);    // disables key repeating
   Menu::set_current(main_menu);
 }
-

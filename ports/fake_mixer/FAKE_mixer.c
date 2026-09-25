@@ -1,5 +1,6 @@
 #include "SDL_mixer.h"
 #include "mm.h"
+#include <kos/thread.h>
 
 //SDL_Mixer
 static void (*music_finished_hook)(void) = NULL;
@@ -67,9 +68,11 @@ void Mix_CloseAudio(void)
 
 void Mix_FreeChunk(Mix_Chunk *chunk)
 {
-	free(chunk);
+	if (!chunk)
+		return;
 
-	//Sample_Free((SAMPLE *)chunk);
+	snd_sfx_unload(chunk->handle);
+	free(chunk);
 }
 
 int Mix_PlayChannel(int channel, Mix_Chunk *chunk, int loops)
@@ -96,7 +99,10 @@ int Mix_PlayChannelTimed(int channel, Mix_Chunk *chunk, int loops, int ticks)
 
 int Mix_HaltChannel(int channel)
 {
-	Player_Stop();
+	if (channel == -1)
+		snd_sfx_stop_all();
+	else
+		snd_sfx_stop(channel);
     
 	if (channel_finished_hook){
 		channel_finished_hook(channel);

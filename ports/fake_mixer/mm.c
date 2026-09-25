@@ -52,7 +52,7 @@
 	you can't have several MREADER objects with different iobase values.
 */
 
-#include <SDL/SDL.h>
+#include <SDL.h>
 
 #include <stdio.h>
 #include <string.h>

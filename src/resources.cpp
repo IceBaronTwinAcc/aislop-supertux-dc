@@ -239,6 +239,7 @@ void loadsounds()
 
 void unloadsounds()
 {
+  Mix_HaltChannel(-1);
   for (int i = 0; i < NUM_SOUNDS; i++)
   {
     if (!sounds[i]) continue;

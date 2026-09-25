@@ -37,6 +37,7 @@ class Tile
 public:
   Tile();
   ~Tile();
+  void load_images();
 
   int id;
 
@@ -45,6 +46,7 @@ public:
   
   std::vector<std::string>  filenames;
   std::vector<std::string> editor_filenames;
+  bool images_loaded;
   
   /** solid tile that is indestructable by Tux */
   bool solid;
@@ -80,7 +82,9 @@ public:
   int anim_speed;
   
   /** Draw a tile on the screen: */
+  static void prepare(unsigned int c);
   static void draw(float x, float y, unsigned int c, Uint8 alpha = 255);
+  static void draw_batch(const float* positions, unsigned int count, unsigned int c, Uint8 alpha = 255);
   static void draw_stretched(float x, float y, int w, int h, unsigned int c, Uint8 alpha = 255);
 };
 
@@ -114,8 +118,9 @@ class TileManager
   
   static std::set<TileGroup>* tilegroups() { if(!instance_) { instance_ = new TileManager(); } return tilegroups_ ? tilegroups_ : tilegroups_ = new std::set<TileGroup>; }
   Tile* get(unsigned int id) {
-    if(id < tiles.size())
+    if(id < tiles.size() && tiles[id])
       {
+        tiles[id]->load_images();
         return tiles[id]; 
       }
     else
@@ -123,6 +128,7 @@ class TileManager
         // Never return 0, but return the 0th tile instead so that
         // user code doesn't have to check for NULL pointers all over
         // the place
+        tiles[0]->load_images();
         return tiles[0]; 
       } 
   }

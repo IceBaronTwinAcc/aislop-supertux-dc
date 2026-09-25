@@ -367,7 +367,15 @@ void load_special_gfx()
   img_bullet    = sprite_manager->load("bullet");
 }
 
+void prepare_special_gfx()
+{
+  img_bullet->prepare();
+  img_star->prepare();
+  img_growup->prepare();
+  img_iceflower->prepare();
+  img_1up->prepare();
+}
+
 void free_special_gfx()
 {
 }
-

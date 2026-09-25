@@ -73,6 +73,7 @@ public:
   
   void activate_world();
   void deactivate_world();
+  void prepare_graphics();
 
   Level*  get_level() { return level; }
   Player* get_tux() { return &tux; }
@@ -132,4 +133,3 @@ extern World global_world;
 /* Local Variables: */
 /* mode:c++ */
 /* End: */
-

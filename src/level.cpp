@@ -711,9 +711,7 @@ Level::load_gfx()
         snprintf(fname, 1024, "%s/images/background/%s", datadir.c_str(), bkgd_image.c_str());
       if (!img_bkgd)
       {
-          printf("load a new bkgd\n");
           img_bkgd = new Surface(fname, IGNORE_ALPHA);
-          printf("loaded a new bkgd\n");
       }
     }
   else
@@ -778,10 +776,13 @@ Level::change(float x, float y, int tm, unsigned int c)
 void
 Level::load_song()
 {
+  level_song = music_manager->load_music(datadir + "/music/" + song_title);
+
+#ifdef __DREAMCAST__
+  level_song_fast = level_song;
+#else
   char* song_path;
   char* song_subtitle;
-
-  level_song = music_manager->load_music(datadir + "/music/" + song_title);
 
   song_path = (char *) malloc(sizeof(char) * datadir.length() +
                               strlen(song_title.c_str()) + 8 + 5);
@@ -796,6 +797,7 @@ Level::load_song()
   }
   free(song_subtitle);
   free(song_path);
+#endif
 }
 
 void Level::free_song()

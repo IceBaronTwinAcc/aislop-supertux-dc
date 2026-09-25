@@ -58,7 +58,10 @@ MusicManager::exists_music(const std::string& file)
   if(i != musics.end()) {
     return true;                                      
   }
-  
+
+  if(!faccessible(file.c_str()))
+    return false;
+
   Mix_Music* song = Mix_LoadMUS(file.c_str());
   if(song == 0)
     return false;
@@ -149,4 +152,3 @@ MusicManager::MusicResource::~MusicResource()
   // buggy SDL_mixer :-/
   //Mix_FreeMusic(music);
 }
-

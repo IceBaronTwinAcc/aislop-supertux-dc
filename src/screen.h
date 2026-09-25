@@ -22,7 +22,11 @@
 
 #include <SDL.h>
 #ifndef NOOPENGL
+#ifdef __DREAMCAST__
+#include <GL/gl.h>
+#else
 #include <SDL_opengl.h>
+#endif
 #endif
 #include "texture.h"
 

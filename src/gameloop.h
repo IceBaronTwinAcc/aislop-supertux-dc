@@ -84,7 +84,7 @@ class GameSession
   ~GameSession();
 
   /** Enter the busy loop */
-  ExitStatus run();
+  ExitStatus run(unsigned int max_runtime = 0);
 
   void draw();
   void action(double frame_ratio);
@@ -118,4 +118,3 @@ bool rectcollision(base_type* one, base_type* two);
 void bumpbrick(float x, float y);
 
 #endif /*SUPERTUX_GAMELOOP_H*/
-

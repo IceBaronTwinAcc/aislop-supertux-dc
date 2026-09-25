@@ -27,13 +27,18 @@
 #include <unistd.h>
 #include <SDL.h>
 #include <SDL_image.h>
-
 #ifdef __DREAMCAST__
 #include <SDL_dreamcast.h>
+#include <dc/video.h>
 #endif
 
 #ifndef NOOPENGL
+#ifdef __DREAMCAST__
+#include <GL/gl.h>
+#include <GL/glkos.h>
+#else
 #include <SDL_opengl.h>
+#endif
 #endif
 
 #include <sys/stat.h>
@@ -58,6 +63,8 @@
 #include "intro.h"
 #include "title.h"
 #include "music_manager.h"
+#include "pvr_renderer.h"
+#include "dreamcast.h"
 
 #include "player.h"
 
@@ -76,6 +83,16 @@
 /* Don't use this to test for the actual screen sizes. Use screen->w/h instead! */
 #define SCREEN_W 640
 #define SCREEN_H 480
+
+#ifdef __DREAMCAST__
+static void apply_dreamcast_refresh_rate()
+{
+  if(vid_check_cable() == CT_VGA)
+    vid_set_mode(DM_640x480_VGA, PM_RGB565);
+  else
+    vid_set_mode(use_60hz ? DM_640x480_NTSC_IL : DM_640x480_PAL_IL, PM_RGB565);
+}
+#endif
 
 /* Local function prototypes: */
 void seticon(void);
@@ -393,12 +410,21 @@ void st_menu(void)
 
   options_menu->additem(MN_LABEL,"Options",0,0);
   options_menu->additem(MN_HL,"",0,0);
-#ifndef NOOPENGL
+#ifdef PVR_RENDERER
+  options_menu->additem(MN_DEACTIVE,"PVR renderer",&use_gl,0, MNID_OPENGL);
+#elif !defined(NOOPENGL)
   options_menu->additem(MN_TOGGLE,"OpenGL",&use_gl,0, MNID_OPENGL);
 #else
   options_menu->additem(MN_DEACTIVE,"OpenGL (not supported)",&use_gl, 0, MNID_OPENGL);
 #endif
+#ifdef PVR_RENDERER
+  options_menu->additem(MN_DEACTIVE,"Fullscreen",&use_fullscreen,0, MNID_FULLSCREEN);
+#else
   options_menu->additem(MN_TOGGLE,"Fullscreen",&use_fullscreen,0, MNID_FULLSCREEN);
+#endif
+#ifdef __DREAMCAST__
+  options_menu->additem(MN_TOGGLE,"60 Hz",&use_60hz,0, MNID_60HZ);
+#endif
   if(audio_device)
     {
       options_menu->additem(MN_TOGGLE,"Sound     ", &use_sound,0, MNID_SOUND);
@@ -541,7 +567,9 @@ void process_options_menu(void)
   switch (options_menu->check())
     {
     case MNID_OPENGL:
-#ifndef NOOPENGL
+#ifdef PVR_RENDERER
+      break;
+#elif !defined(NOOPENGL)
       if(use_gl != options_menu->isToggled(MNID_OPENGL))
         {
           //use_gl = !use_gl;
@@ -557,6 +585,11 @@ void process_options_menu(void)
           //use_fullscreen = !use_fullscreen;
           st_video_setup();
         }
+      break;
+    case MNID_60HZ:
+#ifdef __DREAMCAST__
+      st_video_set_refresh_rate();
+#endif
       break;
     case MNID_SOUND:
       //if(use_sound != options_menu->isToggled(MNID_SOUND))
@@ -653,6 +686,11 @@ void st_general_free(void)
 
 void st_video_setup(void)
 {
+#ifdef PVR_RENDERER
+  if(screen)
+    return;
+#endif
+
   /* Init SDL Video: */
   if (SDL_Init(SDL_INIT_VIDEO) < 0)
     {
@@ -664,16 +702,65 @@ void st_video_setup(void)
     }
 
   /* Open display: */
+#ifdef PVR_RENDERER
+  st_video_setup_pvr();
+#else
   if(use_gl)
     st_video_setup_gl();
   else
     st_video_setup_sdl();
+#endif
 
   Surface::reload_all();
 
   /* Set window manager stuff: */
   SDL_WM_SetCaption("SuperTux " VERSION, "SuperTux");
 }
+
+#ifdef __DREAMCAST__
+void __attribute__((noinline)) st_video_set_refresh_rate(void)
+{
+  Surface::begin_synchronized_texture_release();
+  Surface::unprepare_all();
+  Surface::end_texture_release();
+
+#ifdef PVR_RENDERER
+  PVRRenderer::shutdown();
+#endif
+
+  SDL_DC_Default60Hz(use_60hz ? SDL_TRUE : SDL_FALSE);
+
+#ifdef PVR_RENDERER
+  st_video_setup_pvr();
+#else
+  if(use_gl)
+    st_video_setup_gl();
+  else
+    st_video_setup_sdl();
+#endif
+}
+#endif
+
+#ifdef PVR_RENDERER
+void st_video_setup_pvr(void)
+{
+  screen = SDL_SetVideoMode(SCREEN_W, SCREEN_H, 16, SDL_FULLSCREEN | SDL_HWSURFACE);
+  if(screen == NULL)
+    {
+      fprintf(stderr, "\nError: I could not set up PVR video for 640x480 mode.\n%s\n\n",
+              SDL_GetError());
+      exit(1);
+    }
+
+  apply_dreamcast_refresh_rate();
+
+  if(!PVRRenderer::init())
+    {
+      fprintf(stderr, "\nError: I could not initialize the PVR renderer.\n\n");
+      exit(1);
+    }
+}
+#endif
 
 void st_video_setup_sdl(void)
 {
@@ -703,6 +790,10 @@ void st_video_setup_sdl(void)
           exit(1);
         }
     }
+
+#ifdef __DREAMCAST__
+  apply_dreamcast_refresh_rate();
+#endif
 }
 
 void st_video_setup_gl(void)
@@ -741,6 +832,12 @@ void st_video_setup_gl(void)
           exit(1);
         }
     }
+
+#ifdef __DREAMCAST__
+  glKosShutdown();
+  apply_dreamcast_refresh_rate();
+  glKosInit();
+#endif
 
   /*
    * Set up OpenGL for 2D rendering.
@@ -887,7 +984,14 @@ void st_audio_setup(void)
 
 void st_shutdown(void)
 {
+#ifdef __DREAMCAST__
+  dreamcast_mp3_shutdown();
+#endif
   close_audio();
+  Surface::clear_file_cache();
+#ifdef PVR_RENDERER
+  PVRRenderer::shutdown();
+#endif
   SDL_Quit();
   saveconfig();
 }
@@ -1122,4 +1226,3 @@ void usage(char * prog, int ret)
 
   exit(ret);
 }
-

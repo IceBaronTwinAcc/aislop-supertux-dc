@@ -18,14 +18,15 @@
 //  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include <iostream>
+#include <algorithm>
+#include <map>
+#include <set>
 #include <sstream>
 #include <vector>
 #include <assert.h>
 #include <unistd.h>
 
-#ifdef __DREAMCAST__
-#include <mp3/sndserver.h>
-#endif
+
 
 #include "dreamcast.h"
 #include "globals.h"
@@ -146,9 +147,8 @@ TileManager::TileManager()
                   tile->one_way = WEST_EAST_WAY;
                 }
 
-              tile->sprite = new Surface(
-                           datadir +  "/images/worldmap/" + filename, 
-                           USE_ALPHA);
+              tile->sprite = 0;
+              tile->imagefile = datadir + "/images/worldmap/" + filename;
 
               if (id >= int(tiles.size()))
                 tiles.resize(id+1);
@@ -181,6 +181,8 @@ Tile*
 TileManager::get(int i)
 {
   assert(i >=0 && i < int(tiles.size()));
+  if(!tiles[i]->sprite)
+    tiles[i]->sprite = new Surface(tiles[i]->imagefile, USE_ALPHA);
   return tiles[i];
 }
 
@@ -383,6 +385,7 @@ Tux::update(float delta)
 
 //---------------------------------------------------------------------------
 Tile::Tile()
+  : sprite(0)
 {
 }
 
@@ -411,6 +414,9 @@ WorldMap::WorldMap()
   
   input_direction = D_NONE;
   enter_level = false;
+#ifdef PROFILE_AUTORUN_WORLDMAP
+  profile_level_runtime = 0;
+#endif
 
   name = "<no file>";
   music = "SALCON.MOD";
@@ -792,19 +798,31 @@ WorldMap::update(float delta)
             {
               std::cout << "Enter the current level: " << level->name << std::endl;;
 
-              deleteSprites();
-              tux->deleteSprites();
-
+#ifdef __DREAMCAST__
+              Surface::print_memory_stats("before session construction");
+#endif
               GameSession* session = new GameSession(datadir +  "/levels/" + level->name,
                                                      1, ST_GL_LOAD_LEVEL_FILE);
 
               loadsounds();
 
-              GameSession::ExitStatus result = session->run();
+              GameSession::ExitStatus result = session->run(
+#ifdef PROFILE_AUTORUN_WORLDMAP
+                profile_level_runtime
+#else
+                0
+#endif
+              );
+#ifdef PROFILE_AUTORUN_WORLDMAP
+              profile_level_runtime = 0;
+#endif
               bool coffee = session->get_world()->get_tux()->got_coffee;
               bool big = session->get_world()->get_tux()->size == BIG;
               delete session;
               session = 0;
+#ifdef __DREAMCAST__
+              Surface::print_memory_stats("after session deletion");
+#endif
 
               switch (result)
                 {
@@ -855,10 +873,10 @@ WorldMap::update(float delta)
                         display_text_file(level->extro_filename,
                                           "/images/background/extro.jpg", SCROLL_SPEED_MESSAGE);
                         music_manager->halt_music();
-                        mp3_start((datadir + "/music/credits.mp3").c_str(), 0);
+                        dreamcast_mp3_start((datadir + "/music/credits.mp3").c_str(), 0);
                         display_text_file("CREDITS",
                                           "/images/background/oiltux.jpg", SCROLL_SPEED_CREDITS);
-                        mp3_stop();
+                        dreamcast_mp3_stop();
                         music_manager->play_music(theme);
                         quit = true;
                       }
@@ -884,8 +902,6 @@ WorldMap::update(float delta)
                 }
 
               unloadsounds();
-              loadSprites();
-              tux->loadSprites();
 
               music_manager->play_music(song);
               Menu::set_current(0);
@@ -939,6 +955,35 @@ WorldMap::update(float delta)
     }
 }
 
+#ifdef PROFILE_AUTORUN_WORLDMAP
+bool
+WorldMap::profile_enter_level(int level_number, unsigned int runtime)
+{
+  int current_level = 0;
+  for(Levels::iterator i = levels.begin(); i != levels.end(); ++i)
+    {
+      if (i->name.empty())
+        continue;
+
+      ++current_level;
+      if (current_level == level_number)
+        {
+          printf("PROFILE world map: entering level %d (%s)\n",
+                 level_number, i->name.c_str());
+          tux->set_tile_pos(Point(i->x, i->y));
+          profile_level_runtime = runtime;
+          enter_level = true;
+          update(0);
+          enter_level = false;
+          return true;
+        }
+    }
+
+  printf("PROFILE world map: level %d not found\n", level_number);
+  return false;
+}
+#endif
+
 Tile*
 WorldMap::at(Point p)
 {
@@ -967,13 +1012,24 @@ WorldMap::at_level()
 void
 WorldMap::draw(const Point& offset)
 {
-  for(int y = 0; y < height; ++y)
-    for(int x = 0; x < width; ++x)
+  const int first_x = std::max(0, -offset.x / 32);
+  const int first_y = std::max(0, -offset.y / 32);
+  const int last_x = std::min(width, (-offset.x + screen->w + 31) / 32);
+  const int last_y = std::min(height, (-offset.y + screen->h + 31) / 32);
+  std::map<Surface*, std::vector<float> > batches;
+
+  for(int y = first_y; y < last_y; ++y)
+    for(int x = first_x; x < last_x; ++x)
       {
         Tile* tile = at(Point(x, y));
-        tile->sprite->draw(x*32 + offset.x,
-                           y*32 + offset.y);
+        std::vector<float>& positions = batches[tile->sprite];
+        positions.push_back(x * 32 + offset.x);
+        positions.push_back(y * 32 + offset.y);
       }
+
+  for(std::map<Surface*, std::vector<float> >::iterator i = batches.begin();
+      i != batches.end(); ++i)
+    i->first->draw_batch(&i->second[0], i->second.size() / 2);
   
   for(Levels::iterator i = levels.begin(); i != levels.end(); ++i)
     {
@@ -1057,6 +1113,9 @@ void
 WorldMap::display()
 {
   Menu::set_current(0);
+#ifdef PROFILE_INPUT_PLAYBACK
+  dreamcast_profile_input_set_context(PROFILE_INPUT_WORLDMAP);
+#endif
 
   quit = false;
 
@@ -1068,10 +1127,13 @@ WorldMap::display()
 
   last_update_time = update_time = st_get_ticks();
 
+  std::set<int> used_tiles(tilemap.begin(), tilemap.end());
+  for(std::set<int>::iterator i = used_tiles.begin(); i != used_tiles.end(); ++i)
+    tile_manager->get(*i);
+
   while(!quit)
     {
       float delta = ((float)(update_time-last_update_time))/100.0;
-
       delta *= 1.3f;
 
       if (delta > 10.0f)
@@ -1167,18 +1229,16 @@ WorldMap::loadgame(const std::string& filename)
   if (!file)
     return;
 
-#ifdef __DREAMCAST__
-  // Dreamcast: parse VMU data
-  vmu_pkg_t pkg = loadFromVMU(file);
-  fclose(file);
-
-  file = fmemopen((char*)pkg.data, (size_t)pkg.data_len, "r");
-#endif
-
   // read slot file
   lisp_stream_t stream;
 
+#ifdef __DREAMCAST__
+  std::string vmu_data = loadFromVMU(file);
+  fclose(file);
+  lisp_stream_init_string(&stream, const_cast<char*>(vmu_data.c_str()));
+#else
   lisp_stream_init_file(&stream, file);
+#endif
   lisp_object_t* savegame = lisp_read(&stream);
 
   if (!savegame)
@@ -1247,9 +1307,11 @@ WorldMap::loadgame(const std::string& filename)
           level_cur = lisp_cdr(level_cur);
         }
     }
- 
+
   lisp_free(savegame);
+#ifndef __DREAMCAST__
   fclose(file);
+#endif
 }
 
 void
@@ -1265,4 +1327,3 @@ WorldMap::loadmap(const std::string& filename)
 /* Local Variables: */
 /* mode:c++ */
 /* End: */
-

@@ -1,0 +1,29 @@
+diff --git a/GL/framebuffer.c b/GL/framebuffer.c
+index 2ba3157..04e6da1 100644
+--- a/GL/framebuffer.c
++++ b/GL/framebuffer.c
+@@ -96,7 +96,6 @@ void _glFramebufferFinishScene(void) {
+             (void)(*(volatile uint32_t *)0xa05f8000);
+         } else {
+             SceneFinish();
+             pvr_wait_ready();
+-            pvr_wait_render_done();
+         }
+         FBO_SCENE_OPEN = GL_FALSE;
+         FBO_SCENE_IS_RTT = GL_FALSE;
+diff --git a/GL/alloc/alloc.c b/GL/alloc/alloc.c
+index d1d307d..050b189 100644
+--- a/GL/alloc/alloc.c
++++ b/GL/alloc/alloc.c
+@@ -396,8 +396,9 @@ static void alloc_release_blocks(struct AllocEntry* it) {
+     DBG_MSG("Free: size: %d, us: %d, sb: %d, off: %d\n", it->size, used_subblocks, block, offset);
+ 
+     /* Wipe out any leading subblocks */
+-    int c = (used_subblocks < 8) ? used_subblocks : 8;
+-    for(int i = 0; i < c; ++i) {
++    size_t leading_subblocks = 8 - offset;
++    size_t c = (used_subblocks < leading_subblocks) ? used_subblocks : leading_subblocks;
++    for(size_t i = 0; i < c; ++i) {
+         mask |= (1 << (7 - (offset + i)));
+         used_subblocks--;
+     }

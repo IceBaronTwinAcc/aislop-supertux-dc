@@ -26,6 +26,7 @@ TileManager* TileManager::instance_  = 0;
 std::set<TileGroup>* TileManager::tilegroups_  = 0;
 
 Tile::Tile()
+  : images_loaded(false)
 {
 }
 
@@ -39,6 +40,21 @@ Tile::~Tile()
       i != editor_images.end(); ++i) {
     delete *i;                                                                
   }
+}
+
+void Tile::load_images()
+{
+  if(images_loaded)
+    return;
+
+  for(std::vector<std::string>::iterator i = filenames.begin();
+      i != filenames.end(); ++i)
+    {
+      std::string imagefile = datadir + "/images/tilesets/" + ReplaceAll(*i, "-", "");
+      images.push_back(new Surface(imagefile, USE_ALPHA));
+    }
+
+  images_loaded = true;
 }
 
 //---------------------------------------------------------------------------
@@ -113,18 +129,6 @@ void TileManager::load_tileset(std::string filename)
               reader.read_string_vector("images",  &tile->filenames);
 	      reader.read_string_vector("editor-images", &tile->editor_filenames);
 
-              for(std::vector<std::string>::iterator it = tile->
-                  filenames.begin();
-                  it != tile->filenames.end();
-                  ++it)
-                {
-                  Surface* cur_image;
-                  std::string imgfile = datadir +  "/images/tilesets/" + ReplaceAll((*it), "-", "");
-                  tile->images.push_back(cur_image);
-                  tile->images[tile->images.size()-1] = new Surface(
-                               imgfile,
-                               USE_ALPHA);
-                }
               for(std::vector<std::string>::iterator it = tile->editor_filenames.begin();
                   it != tile->editor_filenames.end();
                   ++it)
@@ -185,6 +189,25 @@ void TileManager::load_tileset(std::string filename)
 }
 
 void
+Tile::prepare(unsigned int c)
+{
+  if(c == 0)
+    return;
+
+  Tile* ptile = TileManager::instance()->get(c);
+  if(!ptile)
+    return;
+
+  for(std::vector<Surface*>::iterator i = ptile->images.begin();
+      i != ptile->images.end(); ++i)
+    (*i)->prepare();
+}
+
+
+
+
+
+void
 Tile::draw(float x, float y, unsigned int c, Uint8 alpha)
 {
   if (c != 0)
@@ -206,6 +229,23 @@ Tile::draw(float x, float y, unsigned int c, Uint8 alpha)
             }
         }
     }
+}
+
+void
+Tile::draw_batch(const float* positions, unsigned int count, unsigned int c, Uint8 alpha)
+{
+  if (c == 0 || count == 0)
+    return;
+
+  Tile* ptile = TileManager::instance()->get(c);
+  if(!ptile || ptile->images.empty())
+    return;
+
+  unsigned int image = 0;
+  if(ptile->images.size() > 1)
+    image = ((global_frame_counter * 25) / ptile->anim_speed) % ptile->images.size();
+
+  ptile->images[image]->draw_batch(positions, count, alpha);
 }
 
 void
@@ -233,4 +273,3 @@ Tile::draw_stretched(float x, float y, int w, int h, unsigned int c, Uint8 alpha
 }
 
 // EOF //
-

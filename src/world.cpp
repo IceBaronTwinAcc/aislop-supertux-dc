@@ -24,6 +24,10 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef __DREAMCAST__
+#include <kos.h>
+#include <GL/glkos.h>
+#endif
 #include "globals.h"
 #include "scene.h"
 #include "screen.h"
@@ -32,10 +36,118 @@
 #include "level.h"
 #include "tile.h"
 #include "resources.h"
+#include "special.h"
 
 Surface* img_distro[4];
 
 World* World::current_ = 0;
+
+static void
+draw_tile_layer(const std::vector<unsigned int> tiles[15])
+{
+  enum { VISIBLE_TILES = 15 * 21, HASH_SIZE = 512 };
+  unsigned int hash_tiles[HASH_SIZE] = { 0 };
+  unsigned short hash_buckets[HASH_SIZE] = { 0 };
+  unsigned int batch_tiles[VISIBLE_TILES];
+  unsigned short batch_counts[VISIBLE_TILES] = { 0 };
+  unsigned short batch_offsets[VISIBLE_TILES];
+  unsigned short batch_used[VISIBLE_TILES] = { 0 };
+  float positions[15 * 21 * 2];
+  const int tile_offset = (int)(scroll_x / 32);
+  const float pixel_offset = fmodf(scroll_x, 32);
+  unsigned int batch_count = 0;
+
+  for(int y = 0; y < 15; ++y)
+    {
+      for(int x = 0; x < 21; ++x)
+        {
+          const unsigned int tile = tiles[y][x + tile_offset];
+          if(tile == 0)
+            continue;
+
+          unsigned int slot = (tile * 2654435761u) & (HASH_SIZE - 1);
+          while(hash_buckets[slot] != 0 && hash_tiles[slot] != tile)
+            slot = (slot + 1) & (HASH_SIZE - 1);
+
+          if(hash_buckets[slot] == 0)
+            {
+              hash_tiles[slot] = tile;
+              hash_buckets[slot] = ++batch_count;
+              batch_tiles[batch_count - 1] = tile;
+            }
+
+          ++batch_counts[hash_buckets[slot] - 1];
+        }
+    }
+
+  unsigned int offset = 0;
+  for(unsigned int batch = 0; batch < batch_count; ++batch)
+    {
+      batch_offsets[batch] = offset;
+      offset += batch_counts[batch];
+    }
+
+  for(int y = 0; y < 15; ++y)
+    {
+      for(int x = 0; x < 21; ++x)
+        {
+          const unsigned int tile = tiles[y][x + tile_offset];
+          if(tile == 0)
+            continue;
+
+          unsigned int slot = (tile * 2654435761u) & (HASH_SIZE - 1);
+          while(hash_tiles[slot] != tile)
+            slot = (slot + 1) & (HASH_SIZE - 1);
+
+          const unsigned int batch = hash_buckets[slot] - 1;
+          const unsigned int position = batch_offsets[batch] + batch_used[batch]++;
+          positions[position * 2] = 32 * x - pixel_offset;
+          positions[position * 2 + 1] = y * 32;
+        }
+    }
+
+  Surface::begin_draw_batch();
+  for(unsigned int batch = 0; batch < batch_count; ++batch)
+    {
+      Tile::draw_batch(&positions[batch_offsets[batch] * 2],
+                       batch_counts[batch], batch_tiles[batch]);
+    }
+  Surface::end_draw_batch();
+}
+
+static void
+prepare_level_tiles(Level* level)
+{
+  std::set<unsigned int> tile_ids;
+  for(int y = 0; y < 15; ++y)
+    {
+      tile_ids.insert(level->bg_tiles[y].begin(), level->bg_tiles[y].end());
+      tile_ids.insert(level->ia_tiles[y].begin(), level->ia_tiles[y].end());
+      tile_ids.insert(level->fg_tiles[y].begin(), level->fg_tiles[y].end());
+    }
+
+  for(std::set<unsigned int>::iterator i = tile_ids.begin();
+      i != tile_ids.end(); ++i)
+    Tile::prepare(*i);
+}
+
+static void
+prepare_player_sprite(PlayerSprite& sprite)
+{
+  Sprite* sprites[] = {
+    sprite.stand_left, sprite.stand_right,
+    sprite.walk_left, sprite.walk_right,
+    sprite.jump_left, sprite.jump_right,
+    sprite.kick_left, sprite.kick_right,
+    sprite.skid_left, sprite.skid_right,
+    sprite.grab_left, sprite.grab_right,
+    sprite.duck_left, sprite.duck_right
+  };
+
+  for(unsigned int i = 0; i < sizeof(sprites) / sizeof(sprites[0]); ++i)
+    if(sprites[i])
+      sprites[i]->prepare();
+}
 
 World::World(const std::string& filename)
 {
@@ -79,6 +191,25 @@ World::World(const std::string& subset, int level_nr)
 }
 
 void
+World::prepare_graphics()
+{
+  prepare_level_tiles(level);
+  prepare_player_sprite(smalltux);
+  prepare_player_sprite(largetux);
+  tux_life->prepare();
+  prepare_special_gfx();
+  for(unsigned int i = 0; i < 3; ++i)
+    img_distro[i]->prepare();
+
+  for(BadGuys::iterator i = bad_guys.begin(); i != bad_guys.end(); ++i)
+    (*i)->prepare();
+
+#ifdef __DREAMCAST__
+  Surface::print_memory_stats("after level preload");
+#endif
+}
+
+void
 World::apply_bonuses()
 {
   // Apply bonuses from former levels
@@ -103,7 +234,6 @@ World::apply_bonuses()
 World::~World()
 {
   deactivate_world();
-  
   delete level;
 }
 
@@ -192,7 +322,18 @@ World::activate_particle_systems()
 void
 World::draw()
 {
-  int y,x;
+#ifdef __DREAMCAST__
+  static uint64_t profile_period_start = timer_us_gettime64();
+  static uint64_t background_total = 0;
+  static uint64_t background_particles_total = 0;
+  static uint64_t background_tiles_total = 0;
+  static uint64_t interactive_tiles_total = 0;
+  static uint64_t objects_total = 0;
+  static uint64_t foreground_tiles_total = 0;
+  static uint64_t foreground_particles_total = 0;
+  static unsigned int profile_frames = 0;
+  uint64_t profile_start = timer_us_gettime64();
+#endif
 
   /* Draw the real background */
   if(level->img_bkgd)
@@ -205,34 +346,29 @@ World::draw()
     {
       drawgradient(level->bkgd_top, level->bkgd_bottom);
     }
-    
+#ifdef __DREAMCAST__
+  uint64_t profile_background_end = timer_us_gettime64();
+#endif
   /* Draw particle systems (background) */
   std::vector<ParticleSystem*>::iterator p;
   for(p = particle_systems.begin(); p != particle_systems.end(); ++p)
     {
       (*p)->draw(scroll_x, 0, 0);
     }
-
+#ifdef __DREAMCAST__
+  uint64_t profile_background_particles_end = timer_us_gettime64();
+#endif
   /* Draw background: */
-  for (y = 0; y < 15; ++y)
-    {
-      for (x = 0; x < 21; ++x)
-        {
-          Tile::draw(32*x - fmodf(scroll_x, 32), y * 32,
-                     level->bg_tiles[(int)y][(int)x + (int)(scroll_x / 32)]);
-        }
-    }
+  draw_tile_layer(level->bg_tiles);
+#ifdef __DREAMCAST__
+  uint64_t profile_background_tiles_end = timer_us_gettime64();
+#endif
 
   /* Draw interactive tiles: */
-  for (y = 0; y < 15; ++y)
-    {
-      for (x = 0; x < 21; ++x)
-        {
-          Tile::draw(32*x - fmodf(scroll_x, 32), y * 32,
-                     level->ia_tiles[(int)y][(int)x + (int)(scroll_x / 32)]);
-        }
-    }
-
+  draw_tile_layer(level->ia_tiles);
+#ifdef __DREAMCAST__
+  uint64_t profile_interactive_tiles_end = timer_us_gettime64();
+#endif
   /* (Bouncy bricks): */
   for (unsigned int i = 0; i < bouncy_bricks.size(); ++i)
     bouncy_bricks[i]->draw();
@@ -256,22 +392,52 @@ World::draw()
 
   for (unsigned int i = 0; i < broken_bricks.size(); ++i)
     broken_bricks[i]->draw();
-
+#ifdef __DREAMCAST__
+  uint64_t profile_objects_end = timer_us_gettime64();
+#endif
   /* Draw foreground: */
-  for (y = 0; y < 15; ++y)
-    {
-      for (x = 0; x < 21; ++x)
-        {
-          Tile::draw(32*x - fmodf(scroll_x, 32), y * 32,
-                     level->fg_tiles[(int)y][(int)x + (int)(scroll_x / 32)]);
-        }
-    }
+  draw_tile_layer(level->fg_tiles);
+#ifdef __DREAMCAST__
+  uint64_t profile_foreground_tiles_end = timer_us_gettime64();
+#endif
 
   /* Draw particle systems (foreground) */
   for(p = particle_systems.begin(); p != particle_systems.end(); ++p)
     {
       (*p)->draw(scroll_x, 0, 1);
     }
+#ifdef __DREAMCAST__
+  const uint64_t profile_end = timer_us_gettime64();
+  background_total += profile_background_end - profile_start;
+  background_particles_total += profile_background_particles_end - profile_background_end;
+  background_tiles_total += profile_background_tiles_end - profile_background_particles_end;
+  interactive_tiles_total += profile_interactive_tiles_end - profile_background_tiles_end;
+  objects_total += profile_objects_end - profile_interactive_tiles_end;
+  foreground_tiles_total += profile_foreground_tiles_end - profile_objects_end;
+  foreground_particles_total += profile_end - profile_foreground_tiles_end;
+  ++profile_frames;
+
+  if(profile_end - profile_period_start >= 1000000 && profile_frames != 0)
+    {
+      printf("WORLD us/frame bg=%llu bgpart=%llu bgtiles=%llu iatiles=%llu objects=%llu fgtiles=%llu fgpart=%llu\n",
+             (unsigned long long)(background_total / profile_frames),
+             (unsigned long long)(background_particles_total / profile_frames),
+             (unsigned long long)(background_tiles_total / profile_frames),
+             (unsigned long long)(interactive_tiles_total / profile_frames),
+             (unsigned long long)(objects_total / profile_frames),
+             (unsigned long long)(foreground_tiles_total / profile_frames),
+             (unsigned long long)(foreground_particles_total / profile_frames));
+      profile_period_start = timer_us_gettime64();
+      background_total = 0;
+      background_particles_total = 0;
+      background_tiles_total = 0;
+      interactive_tiles_total = 0;
+      objects_total = 0;
+      foreground_tiles_total = 0;
+      foreground_particles_total = 0;
+      profile_frames = 0;
+    }
+#endif
 }
 
 void
@@ -745,4 +911,3 @@ World::trybumpbadguy(float x, float y)
 }
 
 /* EOF */
-

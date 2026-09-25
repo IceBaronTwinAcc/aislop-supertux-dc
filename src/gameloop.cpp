@@ -33,6 +33,7 @@
 
 #ifdef __DREAMCAST__
 #include <kos.h>
+#include <GL/glkos.h>
 #endif
 
 #ifndef WIN32
@@ -61,6 +62,21 @@
 #include "music_manager.h"
 
 GameSession* GameSession::current_ = 0;
+
+#ifdef __DREAMCAST__
+namespace {
+bool profile_active = false;
+uint64_t profile_world_us = 0;
+uint64_t profile_hud_us = 0;
+uint64_t profile_overlay_us = 0;
+uint64_t profile_swap_us = 0;
+
+uint64_t profile_now()
+{
+  return timer_us_gettime64();
+}
+}
+#endif
 
 GameSession::GameSession(const std::string& subset_, int levelnb_, int mode)
   : world(0), st_gl_mode(mode), levelnb(levelnb_), end_sequence(NO_ENDSEQUENCE),
@@ -140,12 +156,26 @@ GameSession::restart_level()
           scroll_x = best_reset_point.x - screen->w/2;
         }
     }
+
+#ifdef PROFILE_AUTORUN_START_X
+  world->get_tux()->base.x = PROFILE_AUTORUN_START_X;
+  world->get_tux()->old_base = world->get_tux()->base;
+  world->get_tux()->previous_base = world->get_tux()->base;
+  scroll_x = PROFILE_AUTORUN_START_X - screen->w / 2;
+#endif
     
   if (st_gl_mode != ST_GL_DEMO_GAME)
     {
       if(st_gl_mode == ST_GL_PLAY || st_gl_mode == ST_GL_LOAD_LEVEL_FILE)
-        levelintro();
+        {
+          levelintro();
+#ifdef __DREAMCAST__
+          Surface::print_memory_stats("before level preload");
+#endif
+        }
     }
+
+  world->prepare_graphics();
 
   time_left.init(true);
   start_timers();
@@ -154,7 +184,19 @@ GameSession::restart_level()
 
 GameSession::~GameSession()
 {
+#ifdef __DREAMCAST__
+  Surface::print_memory_stats("before session teardown");
+  Surface::begin_synchronized_texture_release();
+#ifndef PROFILE_KEEP_SESSION_TEXTURES
+  Surface::unprepare_all();
+#endif
+  Surface::print_memory_stats("after texture release");
+#endif
   delete world;
+#ifdef __DREAMCAST__
+  Surface::print_memory_stats("after world destruction");
+  Surface::end_texture_release();
+#endif
 }
 
 void
@@ -163,23 +205,25 @@ GameSession::levelintro(void)
   music_manager->halt_music();
   
   char str[60];
- 
-  if (get_level()->img_bkgd)
-    get_level()->img_bkgd->draw(0, 0);
-  else
-    drawgradient(get_level()->bkgd_top, get_level()->bkgd_bottom);
 
-  sprintf(str, "%s", world->get_level()->name.c_str());
-  gold_text->drawf(str, 0, 200, A_HMIDDLE, A_TOP, 1);
+  for(int frame = 0; frame < 2; ++frame)
+    {
+      if (get_level()->img_bkgd)
+        get_level()->img_bkgd->draw(0, 0);
+      else
+        drawgradient(get_level()->bkgd_top, get_level()->bkgd_bottom);
 
-  sprintf(str, "TUX x %d", player_status.lives);
-  white_text->drawf(str, 0, 224, A_HMIDDLE, A_TOP, 1);
-  
-  sprintf(str, "by %s", world->get_level()->author.c_str());
-  white_small_text->drawf(str, 0, 360, A_HMIDDLE, A_TOP, 1);
-  
+      sprintf(str, "%s", world->get_level()->name.c_str());
+      gold_text->drawf(str, 0, 200, A_HMIDDLE, A_TOP, 1);
 
-  flipscreen();
+      sprintf(str, "TUX x %d", player_status.lives);
+      white_text->drawf(str, 0, 224, A_HMIDDLE, A_TOP, 1);
+
+      sprintf(str, "by %s", world->get_level()->author.c_str());
+      white_small_text->drawf(str, 0, 360, A_HMIDDLE, A_TOP, 1);
+
+      flipscreen();
+    }
 
   SDL_Event event;
   wait_for_event(event,1000,3000,true);
@@ -285,26 +329,30 @@ GameSession::process_events()
 #ifdef __DREAMCAST__
       if (!Menu::current())
       {
-          maple_device_t *cont = maple_enum_type(0, MAPLE_FUNC_CONTROLLER);
-          cont_state_t *state;
-          if (cont)
-          {
-              state = (cont_state_t *)maple_dev_status(cont);
+#ifdef PROFILE_AUTORUN
+          tux.input.fire = UP;
+#ifdef PROFILE_AUTORUN_MOVE
+          tux.input.up = (global_frame_counter % 90 < 8) ? DOWN : UP;
+          tux.input.right = DOWN;
+#else
+          tux.input.up = UP;
+          tux.input.right = UP;
+#endif
+          tux.input.down = UP;
+          tux.input.left = UP;
+#else
+          const uint32 buttons = getButtons(0);
+          const uint32 pressed = getPressed(0);
 
-              if (state)
-              {
-                  uint32 pressed = getPressed(0);
+          tux.input.fire = (buttons & CONT_A || buttons & CONT_B) ? DOWN : UP;
+          tux.input.up = (buttons & CONT_X || buttons & CONT_Y) ? DOWN : UP;
+          tux.input.down = (buttons & CONT_DPAD_DOWN) ? DOWN : UP;
+          tux.input.left = (buttons & CONT_DPAD_LEFT) ? DOWN : UP;
+          tux.input.right = (buttons & CONT_DPAD_RIGHT) ? DOWN : UP;
 
-                  tux.input.fire = (state->buttons & CONT_A || state->buttons & CONT_B) ? DOWN : UP;
-                  tux.input.up = (state->buttons & CONT_X || state->buttons & CONT_Y) ? DOWN : UP;
-                  tux.input.down = (state->buttons & CONT_DPAD_DOWN) ? DOWN : UP;
-                  tux.input.left = (state->buttons & CONT_DPAD_LEFT) ? DOWN : UP;
-                  tux.input.right = (state->buttons & CONT_DPAD_RIGHT) ? DOWN : UP;
-
-                  if (pressed & CONT_START)
-                      on_escape_press();
-              }
-          }
+          if (pressed & CONT_START)
+              on_escape_press();
+#endif
       }
       else
           Menu::current()->DCevent();
@@ -551,8 +599,17 @@ GameSession::action(double frame_ratio)
 void 
 GameSession::draw()
 {
+#ifdef __DREAMCAST__
+  uint64_t profile_start = profile_now();
+#endif
   world->draw();
+#ifdef __DREAMCAST__
+  uint64_t profile_world_end = profile_now();
+#endif
   drawstatus();
+#ifdef __DREAMCAST__
+  uint64_t profile_hud_end = profile_now();
+#endif
 
   if(game_pause)
     {
@@ -571,7 +628,19 @@ GameSession::draw()
       //mouse_cursor->draw();
     }
 
+#ifdef __DREAMCAST__
+  uint64_t profile_overlay_end = profile_now();
+#endif
   flipscreen();
+#ifdef __DREAMCAST__
+  if(profile_active)
+    {
+      profile_world_us = profile_world_end - profile_start;
+      profile_hud_us = profile_hud_end - profile_world_end;
+      profile_overlay_us = profile_overlay_end - profile_hud_end;
+      profile_swap_us = profile_now() - profile_overlay_end;
+    }
+#endif
 }
 
 void
@@ -607,25 +676,62 @@ GameSession::process_menu()
 }
 
 GameSession::ExitStatus
-GameSession::run()
+GameSession::run(unsigned int max_runtime)
 {
+#ifdef PROFILE_INPUT_PLAYBACK
+  dreamcast_profile_input_set_context(PROFILE_INPUT_GAME);
+#endif
   Menu::set_current(0);
   current_ = this;
   
   int fps_cnt = 0;
-
   update_time = last_update_time = st_get_ticks();
+  const unsigned int run_start = update_time;
 
   // Eat unneeded events
   SDL_Event event;
   while (SDL_PollEvent(&event)) {}
 
   draw();
+  update_time = last_update_time = st_get_ticks();
+
+#ifdef __DREAMCAST__
+  uint64_t profile_period_start = profile_now();
+  uint64_t profile_logic_total = 0;
+  uint64_t profile_world_total = 0;
+  uint64_t profile_hud_total = 0;
+  uint64_t profile_overlay_total = 0;
+  uint64_t profile_swap_total = 0;
+  uint64_t profile_frame_total = 0;
+  uint64_t profile_frame_max = 0;
+  uint64_t profile_swap_max = 0;
+  unsigned int profile_frames = 0;
+  profile_active = true;
+#endif
 
   while (exit_status == ES_NONE)
     {
+      if(max_runtime != 0 && st_get_ticks() - run_start >= max_runtime)
+        {
+#ifdef PROFILE_AUTORUN_FINISH
+          Player* tux = world->get_tux();
+          tux->base.x = (world->get_level()->width - 5) * 32;
+          tux->old_base = tux->base;
+          tux->previous_base = tux->base;
+          max_runtime = 0;
+#else
+          exit_status = ES_LEVEL_ABORT;
+          break;
+#endif
+        }
+
+#ifdef __DREAMCAST__
+      const uint64_t profile_frame_start = profile_now();
+#endif
       /* Calculate the movement-factor */
       double frame_ratio = ((double)(update_time-last_update_time))/((double)FRAME_RATE);
+      if(frame_ratio > 10.0)
+        frame_ratio = 10.0;
 
       if(!frame_timer.check())
         {
@@ -644,12 +750,16 @@ GameSession::run()
       // determistic and not different on different machines
       if(!game_pause && !Menu::current())
         {
-          // Update the world
-          check_end_conditions();
-          if (end_sequence == ENDSEQUENCE_RUNNING)
-             action(frame_ratio/2);
-          else if(end_sequence == NO_ENDSEQUENCE)
-             action(frame_ratio);
+          while(frame_ratio > 0.0 && exit_status == ES_NONE)
+            {
+              const double step = frame_ratio > 1.0 ? 1.0 : frame_ratio;
+              check_end_conditions();
+              if (end_sequence == ENDSEQUENCE_RUNNING)
+                action(step / 2);
+              else if(end_sequence == NO_ENDSEQUENCE)
+                action(step);
+              frame_ratio -= step;
+            }
         }
       else
         {
@@ -657,7 +767,51 @@ GameSession::run()
           //SDL_Delay(50);
         }
 
+#ifdef __DREAMCAST__
+      const uint64_t profile_draw_start = profile_now();
+#endif
       draw();
+#ifdef __DREAMCAST__
+      const uint64_t profile_frame_end = profile_now();
+      const uint64_t profile_frame_us = profile_frame_end - profile_frame_start;
+      profile_logic_total += profile_draw_start - profile_frame_start;
+      profile_world_total += profile_world_us;
+      profile_hud_total += profile_hud_us;
+      profile_overlay_total += profile_overlay_us;
+      profile_swap_total += profile_swap_us;
+      profile_frame_total += profile_frame_us;
+      if(profile_frame_us > profile_frame_max)
+        profile_frame_max = profile_frame_us;
+      if(profile_swap_us > profile_swap_max)
+        profile_swap_max = profile_swap_us;
+      ++profile_frames;
+
+      const uint64_t profile_elapsed = profile_frame_end - profile_period_start;
+      if(profile_elapsed >= 1000000 && profile_frames != 0)
+        {
+          printf("FPS %.1f PROFILE us/frame avg=%llu max=%llu logic=%llu world=%llu hud=%llu overlay=%llu swap=%llu swapmax=%llu\n",
+                 profile_frames * 1000000.0 / profile_elapsed,
+                 (unsigned long long)(profile_frame_total / profile_frames),
+                 (unsigned long long)profile_frame_max,
+                 (unsigned long long)(profile_logic_total / profile_frames),
+                 (unsigned long long)(profile_world_total / profile_frames),
+                 (unsigned long long)(profile_hud_total / profile_frames),
+                 (unsigned long long)(profile_overlay_total / profile_frames),
+                 (unsigned long long)(profile_swap_total / profile_frames),
+                 (unsigned long long)profile_swap_max);
+
+          profile_period_start = profile_now();
+          profile_logic_total = 0;
+          profile_world_total = 0;
+          profile_hud_total = 0;
+          profile_overlay_total = 0;
+          profile_swap_total = 0;
+          profile_frame_total = 0;
+          profile_frame_max = 0;
+          profile_swap_max = 0;
+          profile_frames = 0;
+        }
+#endif
 
       /* Time stops in pause mode */
       if(game_pause || Menu::current())
@@ -712,6 +866,13 @@ GameSession::run()
             }
         }
     }
+
+#ifdef __DREAMCAST__
+  profile_active = false;
+#endif
+#ifdef PROFILE_INPUT_PLAYBACK
+  dreamcast_profile_input_set_context(PROFILE_INPUT_WORLDMAP);
+#endif
   
   return exit_status;
 }
@@ -752,11 +913,11 @@ GameSession::drawstatus()
   white_text->draw("COINS", screen->h, 0, 1);
   gold_text->draw(str, 608, 0, 1);
 
-  white_text->draw("LIVES", 480, 20);
+  white_text->draw("LIVES", 480, 20, 1);
   if (player_status.lives >= 5)
     {
       sprintf(str, "%dx", player_status.lives);
-      gold_text->draw_align(str, 617, 20, A_RIGHT, A_TOP);
+      gold_text->draw_align(str, 617, 20, A_RIGHT, A_TOP, 1);
       tux_life->draw(565+(18*3), 20);
     }
   else
@@ -837,18 +998,16 @@ std::string slotinfo(int slot)
   {
       opened = true;
 
-#ifdef __DREAMCAST__
-      // Dreamcast: parse VMU data
-      vmu_pkg_t pkg = loadFromVMU(file);
-      fclose(file);
-
-      file = fmemopen((char*)pkg.data, (size_t)pkg.data_len, "r");
-#endif
-
       // read slot file
       lisp_stream_t stream;
 
+#ifdef __DREAMCAST__
+      std::string vmu_data = loadFromVMU(file);
+      fclose(file);
+      lisp_stream_init_string(&stream, const_cast<char*>(vmu_data.c_str()));
+#else
       lisp_stream_init_file(&stream, file);
+#endif
       savegame = lisp_read(&stream);
   }
 
@@ -857,7 +1016,9 @@ std::string slotinfo(int slot)
       LispReader reader(lisp_cdr(savegame));
       reader.read_string("title", &title);
       lisp_free(savegame);
+#ifndef __DREAMCAST__
       fclose(file);
+#endif
     }
 
   if (opened)
@@ -872,5 +1033,3 @@ std::string slotinfo(int slot)
 
   return tmp;
 }
-
-
