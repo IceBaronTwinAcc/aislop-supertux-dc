@@ -100,8 +100,14 @@ MusicManager::play_music(const MusicRef& musicref, int loops)
   if(!audio_device)
     return;
 
-  if(musicref.music == 0 || current_music == musicref.music)
+  if(musicref.music == 0)
     return;
+
+  if(current_music == musicref.music) {
+    if(music_enabled && !Mix_PlayingMusic())
+      Mix_PlayMusic(current_music->music, loops);
+    return;
+  }
 
   Mix_HaltMusic();
   if(current_music)

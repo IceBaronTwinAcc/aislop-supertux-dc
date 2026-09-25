@@ -13,14 +13,15 @@ void shutdown();
 void set_clear_color(Uint8 r, Uint8 g, Uint8 b);
 void finish_frame();
 void wait_for_render();
+bool surface_has_transparency(SDL_Surface* surface);
 
-pvr_ptr_t upload_texture(SDL_Surface* surface, int width, int height);
+pvr_ptr_t upload_texture(SDL_Surface* surface, int width, int height, bool has_alpha);
 void free_texture(pvr_ptr_t texture);
 
-void draw_texture(pvr_ptr_t texture, int texture_width, int texture_height,
+void draw_texture(pvr_ptr_t texture, int texture_width, int texture_height, bool has_alpha,
                   float sx, float sy, float sw, float sh,
                   float x, float y, float w, float h, Uint8 alpha);
-void draw_texture_batch(pvr_ptr_t texture, int texture_width, int texture_height,
+void draw_texture_batch(pvr_ptr_t texture, int texture_width, int texture_height, bool has_alpha,
                         float sx, float sy, float sw, float sh,
                         const float* positions, unsigned int count,
                         float w, float h, Uint8 alpha);

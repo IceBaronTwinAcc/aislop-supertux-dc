@@ -193,6 +193,7 @@ private:
   std::string pvr_texture_cache_key;
   int pvr_texture_width;
   int pvr_texture_height;
+  bool pvr_texture_has_alpha;
 };
 #endif
 

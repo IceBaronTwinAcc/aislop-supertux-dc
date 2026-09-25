@@ -1134,31 +1134,40 @@ static void release_cached_pvr_texture(const std::string& key)
 }
 
 SurfacePVR::SurfacePVR(SDL_Surface* surf, int use_alpha)
-  : pvr_texture(0), pvr_texture_width(0), pvr_texture_height(0)
+  : pvr_texture(0), pvr_texture_width(0), pvr_texture_height(0),
+    pvr_texture_has_alpha(use_alpha == USE_ALPHA)
 {
   sdl_surface = sdl_surface_from_sdl_surface(surf, use_alpha);
+  pvr_texture_has_alpha = pvr_texture_has_alpha &&
+                          PVRRenderer::surface_has_transparency(sdl_surface);
   w = sdl_surface->w;
   h = sdl_surface->h;
 }
 
 SurfacePVR::SurfacePVR(const std::string& file, int use_alpha)
-  : pvr_texture(0), pvr_texture_width(0), pvr_texture_height(0)
+  : pvr_texture(0), pvr_texture_width(0), pvr_texture_height(0),
+    pvr_texture_has_alpha(use_alpha == USE_ALPHA)
 {
   std::ostringstream key;
   key << "file:" << use_alpha << ':' << file;
   pvr_texture_cache_key = key.str();
   sdl_surface = sdl_surface_from_file(file, use_alpha);
+  pvr_texture_has_alpha = pvr_texture_has_alpha &&
+                          PVRRenderer::surface_has_transparency(sdl_surface);
   w = sdl_surface->w;
   h = sdl_surface->h;
 }
 
 SurfacePVR::SurfacePVR(const std::string& file, int x, int y, int width, int height, int use_alpha)
-  : pvr_texture(0), pvr_texture_width(0), pvr_texture_height(0)
+  : pvr_texture(0), pvr_texture_width(0), pvr_texture_height(0),
+    pvr_texture_has_alpha(use_alpha == USE_ALPHA)
 {
   std::ostringstream key;
   key << "part:" << use_alpha << ':' << file << ':' << x << ':' << y << ':' << width << ':' << height;
   pvr_texture_cache_key = key.str();
   sdl_surface = sdl_surface_part_from_file(file, x, y, width, height, use_alpha);
+  pvr_texture_has_alpha = pvr_texture_has_alpha &&
+                          PVRRenderer::surface_has_transparency(sdl_surface);
   w = sdl_surface->w;
   h = sdl_surface->h;
 }
@@ -1184,7 +1193,8 @@ SurfacePVR::ensure_pvr()
       return;
     }
 
-  texture = PVRRenderer::upload_texture(sdl_surface, pvr_texture_width, pvr_texture_height);
+  texture = PVRRenderer::upload_texture(sdl_surface, pvr_texture_width, pvr_texture_height,
+                                        pvr_texture_has_alpha);
   if(!texture)
     st_abort("No PVR texture memory left.", pvr_texture_cache_key);
 
@@ -1220,7 +1230,7 @@ SurfacePVR::draw(float x, float y, Uint8 alpha, bool update)
 {
   ensure_pvr();
   PVRRenderer::draw_texture(static_cast<pvr_ptr_t>(pvr_texture),
-                            pvr_texture_width, pvr_texture_height,
+                            pvr_texture_width, pvr_texture_height, pvr_texture_has_alpha,
                             0, 0, w, h, x, y, w, h, alpha);
   (void)update;
   return 0;
@@ -1231,7 +1241,7 @@ SurfacePVR::draw_batch(const float* positions, unsigned int count, Uint8 alpha, 
 {
   ensure_pvr();
   PVRRenderer::draw_texture_batch(static_cast<pvr_ptr_t>(pvr_texture),
-                                  pvr_texture_width, pvr_texture_height,
+                                  pvr_texture_width, pvr_texture_height, pvr_texture_has_alpha,
                                   0, 0, w, h, positions, count, w, h, alpha);
   (void)update;
   return 0;
@@ -1244,7 +1254,7 @@ SurfacePVR::draw_part_batch(float sx, float sy, float width, float height,
 {
   ensure_pvr();
   PVRRenderer::draw_texture_batch(static_cast<pvr_ptr_t>(pvr_texture),
-                                  pvr_texture_width, pvr_texture_height,
+                                  pvr_texture_width, pvr_texture_height, pvr_texture_has_alpha,
                                   sx, sy, width, height, positions, count,
                                   width, height, alpha);
   (void)update;
@@ -1256,7 +1266,7 @@ SurfacePVR::draw_bg(Uint8 alpha, bool update)
 {
   ensure_pvr();
   PVRRenderer::draw_texture(static_cast<pvr_ptr_t>(pvr_texture),
-                            pvr_texture_width, pvr_texture_height,
+                            pvr_texture_width, pvr_texture_height, pvr_texture_has_alpha,
                             0, 0, w, h, 0, 0, screen->w, screen->h, alpha);
   (void)update;
   return 0;
@@ -1268,7 +1278,7 @@ SurfacePVR::draw_part(float sx, float sy, float x, float y,
 {
   ensure_pvr();
   PVRRenderer::draw_texture(static_cast<pvr_ptr_t>(pvr_texture),
-                            pvr_texture_width, pvr_texture_height,
+                            pvr_texture_width, pvr_texture_height, pvr_texture_has_alpha,
                             sx, sy, width, height, x, y, width, height, alpha);
   (void)update;
   return 0;
@@ -1279,7 +1289,7 @@ SurfacePVR::draw_stretched(float x, float y, int width, int height, Uint8 alpha,
 {
   ensure_pvr();
   PVRRenderer::draw_texture(static_cast<pvr_ptr_t>(pvr_texture),
-                            pvr_texture_width, pvr_texture_height,
+                            pvr_texture_width, pvr_texture_height, pvr_texture_has_alpha,
                             0, 0, w, h, x, y, width, height, alpha);
   (void)update;
   return 0;

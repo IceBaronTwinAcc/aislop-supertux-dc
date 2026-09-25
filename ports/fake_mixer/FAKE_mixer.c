@@ -253,14 +253,12 @@ int Mix_PlayMusic(Mix_Music *music, int loops)
 	
 	MODULE *module;
 	module=(MODULE *)music;
-	if(loops == -1){
-		module->wrap=1;
-		module->loop=1;
-	}
+	module->wrap = loops == -1;
 	
 	//Set music volume before playing
 	module->volume = musicvolume;
 	Player_Start(module);
+	Player_SetPosition(0);
 	
 	if (mix_music){
 		mix_music(music_data);

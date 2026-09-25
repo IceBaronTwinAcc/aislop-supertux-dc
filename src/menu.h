@@ -51,8 +51,6 @@ enum MainMenuIDs {
   };
 
 enum OptionsMenuIDs {
-  MNID_OPENGL,
-  MNID_FULLSCREEN,
   MNID_60HZ,
   MNID_SOUND,
   MNID_MUSIC,

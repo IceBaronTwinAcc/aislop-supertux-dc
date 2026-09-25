@@ -65,6 +65,23 @@ draw_tile_layer(const std::vector<unsigned int> tiles[15])
           if(tile == 0)
             continue;
 
+          const float tile_x = (x + tile_offset) * 32;
+          const float tile_y = y * 32;
+          bool tile_is_bouncing = false;
+          for(std::vector<BouncyBrick*>::const_iterator i =
+                World::current()->bouncy_bricks.begin();
+              i != World::current()->bouncy_bricks.end(); ++i)
+            {
+              if((*i)->base.x == tile_x && (*i)->base.y == tile_y)
+                {
+                  tile_is_bouncing = true;
+                  break;
+                }
+            }
+
+          if(tile_is_bouncing)
+            continue;
+
           unsigned int slot = (tile * 2654435761u) & (HASH_SIZE - 1);
           while(hash_buckets[slot] != 0 && hash_tiles[slot] != tile)
             slot = (slot + 1) & (HASH_SIZE - 1);

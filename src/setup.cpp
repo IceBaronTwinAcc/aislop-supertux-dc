@@ -410,18 +410,6 @@ void st_menu(void)
 
   options_menu->additem(MN_LABEL,"Options",0,0);
   options_menu->additem(MN_HL,"",0,0);
-#ifdef PVR_RENDERER
-  options_menu->additem(MN_DEACTIVE,"PVR renderer",&use_gl,0, MNID_OPENGL);
-#elif !defined(NOOPENGL)
-  options_menu->additem(MN_TOGGLE,"OpenGL",&use_gl,0, MNID_OPENGL);
-#else
-  options_menu->additem(MN_DEACTIVE,"OpenGL (not supported)",&use_gl, 0, MNID_OPENGL);
-#endif
-#ifdef PVR_RENDERER
-  options_menu->additem(MN_DEACTIVE,"Fullscreen",&use_fullscreen,0, MNID_FULLSCREEN);
-#else
-  options_menu->additem(MN_TOGGLE,"Fullscreen",&use_fullscreen,0, MNID_FULLSCREEN);
-#endif
 #ifdef __DREAMCAST__
   options_menu->additem(MN_TOGGLE,"60 Hz",&use_60hz,0, MNID_60HZ);
 #endif
@@ -566,26 +554,6 @@ void process_options_menu(void)
 {
   switch (options_menu->check())
     {
-    case MNID_OPENGL:
-#ifdef PVR_RENDERER
-      break;
-#elif !defined(NOOPENGL)
-      if(use_gl != options_menu->isToggled(MNID_OPENGL))
-        {
-          //use_gl = !use_gl;
-          st_video_setup();
-        }
-#else
-      *options_menu->get_item_by_id(MNID_OPENGL).toggled = false;
-#endif
-      break;
-    case MNID_FULLSCREEN:
-      if(use_fullscreen != options_menu->isToggled(MNID_FULLSCREEN))
-        {
-          //use_fullscreen = !use_fullscreen;
-          st_video_setup();
-        }
-      break;
     case MNID_60HZ:
 #ifdef __DREAMCAST__
       st_video_set_refresh_rate();
