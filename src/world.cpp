@@ -53,6 +53,7 @@ draw_tile_layer(const std::vector<unsigned int> tiles[15])
   unsigned short batch_offsets[VISIBLE_TILES];
   unsigned short batch_used[VISIBLE_TILES] = { 0 };
   float positions[15 * 21 * 2];
+  bool skipped_tiles[VISIBLE_TILES] = { false };
   const int tile_offset = (int)(scroll_x / 32);
   const float pixel_offset = fmodf(scroll_x, 32);
   unsigned int batch_count = 0;
@@ -80,7 +81,10 @@ draw_tile_layer(const std::vector<unsigned int> tiles[15])
             }
 
           if(tile_is_bouncing)
-            continue;
+            {
+              skipped_tiles[y * 21 + x] = true;
+              continue;
+            }
 
           unsigned int slot = (tile * 2654435761u) & (HASH_SIZE - 1);
           while(hash_buckets[slot] != 0 && hash_tiles[slot] != tile)
@@ -109,7 +113,7 @@ draw_tile_layer(const std::vector<unsigned int> tiles[15])
       for(int x = 0; x < 21; ++x)
         {
           const unsigned int tile = tiles[y][x + tile_offset];
-          if(tile == 0)
+          if(tile == 0 || skipped_tiles[y * 21 + x])
             continue;
 
           unsigned int slot = (tile * 2654435761u) & (HASH_SIZE - 1);
