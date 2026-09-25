@@ -639,6 +639,35 @@ World::collision_handler()
               // collision functions of the collided objects.
               (*j)->collision(*i, CO_BADGUY);
               (*i)->collision(*j, CO_BADGUY);
+
+              if((*i)->dying == DYING_NOT && (*j)->dying == DYING_NOT &&
+                 (*i)->kind != BAD_JUMPY && (*i)->kind != BAD_FLAME &&
+                 (*i)->kind != BAD_STALACTITE && (*i)->kind != BAD_FISH &&
+                 (*j)->kind != BAD_JUMPY && (*j)->kind != BAD_FLAME &&
+                 (*j)->kind != BAD_STALACTITE && (*j)->kind != BAD_FISH)
+                {
+                  const float i_right = (*i)->base.x + (*i)->base.width;
+                  const float j_right = (*j)->base.x + (*j)->base.width;
+                  const float overlap = (i_right < j_right ? i_right : j_right) -
+                                        ((*i)->base.x > (*j)->base.x ?
+                                         (*i)->base.x : (*j)->base.x);
+
+                  if(overlap > 0)
+                    {
+                      const float i_center = (*i)->base.x + (*i)->base.width / 2;
+                      const float j_center = (*j)->base.x + (*j)->base.width / 2;
+                      if(i_center <= j_center)
+                        {
+                          (*i)->base.x -= overlap / 2;
+                          (*j)->base.x += overlap / 2;
+                        }
+                      else
+                        {
+                          (*i)->base.x += overlap / 2;
+                          (*j)->base.x -= overlap / 2;
+                        }
+                    }
+                }
             }
         }
     }
